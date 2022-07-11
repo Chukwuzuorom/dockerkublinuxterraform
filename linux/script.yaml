@@ -1,0 +1,67 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: golang
+  name: golang
+  labels:
+    name: golang
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: golang
+  template:
+    metadata:
+      labels:
+        name: golang
+    spec:
+      containers:
+        - image: MY_NEW_IMAGE
+          name: golang
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "500Mi"
+            limits:
+              cpu: "300m"
+              memory: "500Mi"
+          args:
+          - /bin/sh
+          - -c
+          - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
+          livenessProbe:
+            exec:
+              command:
+              - cat
+              - /tmp/healthy
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+              - cat
+              - /tmp/healthy
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh","-c","golang -s quit; while killall -0 golang; do sleep 1; done"]
+      initContainers:
+      - name: busybox
+        image: busybox:1.28
+        command: ['sh', '-c', "until nslookup golang-service.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for golang; sleep 2; done"]
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: golang
+spec:
+  selector:
+    app: golang
+  ports:
+  - port: 80
+    targetPort: 8080
